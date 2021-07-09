@@ -169,45 +169,55 @@ def find_best_latency (self , input_node , output_node ):
         inout_df . latency == best_latency ]. path . values [0]. replace ('->','')
     return best_path
 
+def propagate (self , lightpath , occupation = False ):
+    path = lightpath . path
+    start_node = self . nodes [ path [0]]
+    propagated_lightpath = start_node . propagate ( lightpath , occupation )
+    return propagated_lightpath
 def stream (self , connections , best ='latency '):
     streamed_connections = []
     for connection in connections :
         input_node = connection . input_node
         output_node = connection . output_node
         signal_power = connection . signal_power
-        self.set_weighted_paths ( signal_power )
         if best == 'latency ':
             path = self . find_best_latency ( input_node , output_node )
         elif best == 'snr ':
             path = self . find_best_snr ( input_node , output_node )
         else :
             print ('ERROR : best input not recognized . Value :',best )
-            continue
-        in_signal_information = SignalInformation ( signal_power , path )
-        out_signal_information = self . propagate ( in_signal_information )
-        connection . latency = out_signal_information . latency
-        noise = out_signal_information . noise_power
+        continue
+        if path :
+        path_occupancy = self . route_space . loc[
+        self . route_space . path == path ].T. values [1:]
+        channel = [i for i in range (len( path_occupancy ))
+        if path_occupancy [i ]== 'free '][0]
+        path = path . replace ('->','')
+        in_lightpath = Lightpath ( signal_power ,path , channel )
+        out_lightpath = self . propagate ( in_lightpath , True )
+        connection . latency = out_lightpath . latency
+        noise_power = out_lightpath . noise_power
         connection .snr = 10* np. log10 ( signal_power / noise_power )
+        self . update_route_space (path , channel )
+        else :
+        connection . latency = None
+        connection .snr = 0
         streamed_connections . append ( connection )
     return streamed_connections
-
-    def available_paths (self , input_node , output_node ):
-        if self . weighted_paths is None :
-            self . set_weighted_paths (1)
-    all_paths = [ path for path in self . weighted_paths . path . values
-            if (( path [0]== input_node ) and ( path [ -1]== output_node ))]
-unavailable_lines = [ line for line in self . lines
-    if self . lines [ line ]. state == 'occupied ']
-        available_paths = []
-        for path in all_paths :
-    available = True
-        for line in unavailable_lines :
-            if line [0] + '->' + line [1] in path :
-                available = False
-            break
-        if available :
-            available_paths . append ( path )
-            return available_paths
+@staticmethod
+def path_to_line_set ( path ):
+    path = path . replace ('->','')
+    return set ([ path [i] + path [i +1] for i in range ( len( path ) -1)])
+def update_route_space (self ,path , channel ):
+    all_paths = [ self . path_to_line_set (p)
+    for p in self . route_space . path . values ]
+    states = self . route_space [ str( channel )]
+    lines = self . path_to_line_set ( path )
+    for i in range (len ( all_paths )):
+        line_set = all_paths [i]
+        if lines . intersection ( line_set ):
+            states [i] = 'occupied '
+            self . route_space [ str( channel )] = states
 def find_best_snr (self , input_node , output_node ):
     available_paths = self . available_paths ( input_node , output_node )
     if available_paths :
