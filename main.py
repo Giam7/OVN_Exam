@@ -1,6 +1,9 @@
+from matplotlib import pyplot as plt
+
 import network
 import signal_information
 import numpy as np
+import pandas as pd
 
 network = network('nodes.json')
 network . connect ()
@@ -32,3 +35,24 @@ df['path '] = paths
 df['latency '] = latencies
 df['noise '] = noises
 df['snr '] = snrs
+
+
+from random import shuffle
+    network = Network ('nodes.json ')
+    network.connect ()
+    node_labels = list ( network . nodes . keys ())
+    connections = []
+    for i in range (100):
+        shuffle ( node_labels )
+        connection = Connection ( node_labels [0] , node_labels [ -1] ,1)
+        connections . append ( connection )
+streamed_connections = network . stream ( connections )
+latencies =[ connection . latency for connection in streamed_connections ]
+plt. hist ( latencies , bins =10)
+plt. title ('Latency Distribution ')
+plt. show ()
+streamed_connections = network . stream ( connections , best ='snr ')
+snrs =[ connection . snr for connection in streamed_connections ]
+plt. hist (snrs , bins =10)
+plt. title ('SNR Distribution ')
+plt. show ()
