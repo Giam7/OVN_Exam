@@ -25,23 +25,23 @@ class Network(object):
         self . _lines = {}
         self . _connected = False
         self . _weighted_paths = None
+        self._route_space = None
         for node_label in node_json :
             # Create the node instance
             node_dict = node_json [ node_label ]
             node_dict ['label '] = node_label
             node = Node ( node_dict )
             self . _nodes [ node_label ] = node
-
-        # Create the line instances
-        for connected_node_label in node_dict [' connected_nodes ']:
-            line_dict ={}
-            line_label = node_label + connected_node_label
-            line_dict ['label '] = line_label
-            node_position = np. array ( node_json [ node_label ][ 'position '])
-            connected_node_position =np.array( node_json [ connected_node_label ][ 'position '])
-            line_dict ['length '] =np.sqrt (np.sum (( node_position - connected_node_position )**2))
-            line = Line ( line_dict )
-            self . _lines [ line_label ] = line
+            # Create the line instance
+                for connected_node_label in node_dict [' connected_nodes ']:
+                    line_dict ={}
+                    line_label = node_label + connected_node_label
+                    line_dict ['label '] = line_label
+                    node_position = np. array ( node_json [ node_label ][ 'position '])
+                    connected_node_position =np.array( node_json [ connected_node_label ][ 'position '])
+                    line_dict ['length '] =np.sqrt (np.sum (( node_position - connected_node_position )**2))
+                line = Line ( line_dict )
+                self . _lines [ line_label ] = line
     @property
     def nodes ( self ):
         return self . _nodes
@@ -270,3 +270,43 @@ snrs =[ connection . snr for connection in streamed_connections ]
 plt. hist (snrs , bins =10)
 plt. title ('SNR Distribution ')
 plt. show ()
+
+def set_weighted_paths (self , signal_power ):
+    if not self . connected :
+        self . connect ()
+        node_labels = self . nodes . keys ()
+        pairs = []
+    for label1 in node_labels :
+        for label2 in node_labels :
+        if label1 != label2 :
+        pairs . append ( label1 + label2 )
+        df = pd. DataFrame ()
+        paths = []
+        latencies = []
+        noises = []
+        snrs = []
+        for pair in pairs :
+            for path in self . find_paths ( pair [0] , pair [1]):
+            path_string = ''
+            for node in path :
+                path_string += node + '->'
+                                        paths . append ( path_string [: -2])
+            # Propagation
+            signal_information = SignalInformation ( signal_power , path )
+            signal_information =
+            self . propagate ( signal_information , occupation = False )
+        latencies . append ( signal_information . latency )
+            noises . append ( signal_information . noise_power )
+        snrs . append (
+        10* np. log10 ( signal_information . signal_power /
+        signal_information . noise_power ))
+df['path '] = paths
+df['latency '] = latencies
+df['noise '] = noises
+df['snr '] = snrs
+self . _weighted_paths = df
+route_space = pd. DataFrame ()
+route_space ['path '] = paths
+for i in range (10):
+    route_space [str(i)]= ['free ']* len( paths )
+    self . _route_space = route_space
