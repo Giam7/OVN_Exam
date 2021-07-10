@@ -1,23 +1,27 @@
-class Connection ( object ):
-    def __init__ (self , input_node , output_node , signal_power ):
-        self._input_node = input_node
-        self_ouput_node = ouput_node
+class Connection:
+    def __init__(self, input: str, output: str, signal_power: float):
+        self._input = input
+        self._output = output
         self._signal_power = signal_power
-        self . _latency = 0
-        self . _snr = 0
+        self._latency = 0.0
+        self._snr = 0.0
         self._bit_rate = 0.0
+
     @property
-    def input_node ( self ):
-        return self . _input_node
+    def input(self):
+        return self._input
+
     @property
-    def ouput_node ( self ):
-        return self . _ouput_node
+    def output(self):
+        return self._output
+
     @property
-    def signal_power ( self ):
-        return self . _signal_power
+    def signal_power(self):
+        return self._signal_power
+
     @property
-    def latency ( self ):
-        return self . _latency
+    def latency(self):
+        return self._latency
 
     @latency.setter
     def latency(self, latency):
@@ -30,7 +34,11 @@ class Connection ( object ):
     @snr.setter
     def snr(self, snr):
         self._snr = snr
-        return self.snr
+
     @property
-    def bitrate(self):
-        return self.bitrate
+    def bit_rate(self):
+        return self._bit_rate
+
+    @bit_rate.setter
+    def bit_rate(self, bit_rate):
+        self._bit_rate = bit_rate

@@ -1,5 +1,8 @@
 from typing import List
 
+from node import Node
+
+
 class SignalInformation:
     def __init__(self, signal_power: float, path: List[str]):
         """
@@ -11,53 +14,63 @@ class SignalInformation:
         self._path = list(path)
         self._noise_power = 0.0  # float
         self._latency = 0.0  # float
+        self._isnr = 0.0
 
-        @property
-        def latency(self):
-            return self._latency
+    @property
+    def latency(self):
+        return self._latency
 
-        @latency.setter
-        def latency(self, latency: float):
-            self._latency = latency
+    @latency.setter
+    def latency(self, latency: float):
+        self._latency = latency
 
-        @property
-        def signal_power(self):
-            return self._signal_power
+    @property
+    def signal_power(self):
+        return self._signal_power
 
-        @signal_power.setter
-        def signal_power(self, signal_power: float):
-            self._signal_power = signal_power
+    @signal_power.setter
+    def signal_power(self, signal_power: float):
+        self._signal_power = signal_power
 
-        @property
-        def noise_power(self):
-            return self._noise_power
+    @property
+    def noise_power(self):
+        return self._noise_power
 
-        @noise_power.setter
-        def noise_power(self, noise_power: float):
-            self._noise_power = noise_power
+    @noise_power.setter
+    def noise_power(self, noise_power: float):
+        self._noise_power = noise_power
 
-        @property
-        def path(self):
-            return self._path
+    @property
+    def path(self):
+        return self._path
 
-        @path.setter
-        def path(self, path: List[str]):
-            self._path = list(path)
+    @path.setter
+    def path(self, path: List[str]):
+        self._path = list(path)
 
-        def update_path(self, node: Node):
-            """
-            Remove crossed node from path
+    @property
+    def isnr(self):
+        return self._isnr
 
-            :param node: Node object
-            """
+    @isnr.setter
+    def isnr(self, isnr: float):
+        self._isnr = isnr
 
-            self._path.remove(node.label)
+    def update_path(self, node: Node):
+        """
+        Remove crossed node from path
 
-        def increase_latency(self, latency: float):
-            """
-            Increase latency
+        :param node: Node object
+        """
 
-            :param latency: Latency value to be added to the signal
-            """
+        self._path.remove(node.label)
 
-            self._latency += latency
+    def increase_latency(self, latency: float):
+        """
+        Increase latency
+
+        :param latency: Latency value to be added to the signal
+        """
+
+        self._latency += latency
+

@@ -1,63 +1,35 @@
+from typing import List
+
 from signal_information import SignalInformation
-class Lightpath ( object ):
-    def __init__ (self ,power ,path , channel ):
-        self . _signal_power = power
-        self . _path = path
-        self . _channel = channel
-        self . _noise_power = 0
-        self . _latency = 0
+
+
+class LightPath(SignalInformation):
+    def __init__(self, signal_power: float, path: List[str]):
+        super().__init__(signal_power, path)
+        self._channel = None
         self._Rs = 32  # symbol rate in GHz
         self._df = 50  # frequency spacing between channels in GHz
-    @property
-    def signal_power ( self ):
-        return self . _signal_power
-    @property
-    def path ( self ):
-        return self . _path
-    @path . setter
-    def path (self , path ):
-        self . _path = path
-    @property
-    def channel ( self ):
-        return channel
 
     @property
-    def noise_power ( self ):
-        return self._noise_power
+    def channel(self):
+        return self._channel
 
-        @noise_power.setter
-        def noise_power(self, noise):
-            self._noise_power = noise
+    @channel.setter
+    def channel(self, channel):
+        self._channel = channel
 
-        @property
-        def latency(self):
-            return self._latency
+    @property
+    def Rs(self):
+        return self._Rs
 
-        @latency.setter
-        def latency(self, latency):
-            self._latency = latency
+    @Rs.setter
+    def Rs(self, Rs: float):
+        self._Rs = Rs
 
-        def add_noise(self, noise):
-            self.noise_power += noise
+    @property
+    def df(self):
+        return self._df
 
-        def add_latency(self, latency):
-            self.latency += latency
-
-        def next(self):
-            self.path = self.path[1:]
-
-            @property
-            def Rs(self):
-                return self._Rs
-
-            @Rs.setter
-            def Rs(self, Rs: float):
-                self._Rs = Rs
-
-            @property
-            def df(self):
-                return self._df
-
-            @df.setter
-            def df(self, df: float):
-                self._df = df
+    @df.setter
+    def df(self, df: float):
+        self._df = df

@@ -6,333 +6,390 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import random
-import connection
-import signal_information
-import line
-import node
 
-
+from lightpath import LightPath
 from signal_information import SignalInformation
 from node import Node
 from line import Line
-import json
+from connection import Connection
 from scipy import special
 
-class Network(object):
-    def __init__ (self , json_path ):
-        node_json = json . load ( open ( json_path ,'r'))
-        self . _nodes = {}
-        self . _lines = {}
-        self . _connected = False
-        self . _weighted_paths = None
-        self._route_space = None
-        for node_label in node_json :
-            # Create the node instance
-            node_dict = node_json [ node_label ]
-            node_dict ['label '] = node_label
-            node = Node ( node_dict )
-            self . _nodes [ node_label ] = node
-            # Create the line instance
-                for connected_node_label in node_dict [' connected_nodes ']:
-                    line_dict ={}
-                    line_label = node_label + connected_node_label
-                    line_dict ['label '] = line_label
-                    node_position = np. array ( node_json [ node_label ][ 'position '])
-                    connected_node_position =np.array( node_json [ connected_node_label ][ 'position '])
-                    line_dict ['length '] =np.sqrt (np.sum (( node_position - connected_node_position )**2))
-                line = Line ( line_dict )
-                self . _lines [ line_label ] = line
+
+class Network:
+    def __init__(self, json_file: str):
+        """
+        :param json_file: String containing json file path
+        """
+
+        with open(json_file, "r") as f:
+            tmp_dict = json.load(f)
+
+        self._nodes = {}
+
+        for node in tmp_dict:
+            tmp_dict.get(node).update({'label': node})
+            tmp_node = Node(tmp_dict.get(node))
+            tmp_node.label = node
+            self._nodes.update({node: tmp_node})
+
+        self._lines = {}
+
+        for node in self._nodes:
+            for connected_node in self._nodes.get(node).connected_nodes:
+                tmp_length = math.dist(self._nodes.get(node).position, self._nodes.get(connected_node).position)
+                tmp_line = Line(self._nodes.get(node).label + connected_node, tmp_length)
+                tmp_line.n_amplifiers = int(tmp_line.length/80000)  # amplifier needed every 80 km
+                self._lines.update({tmp_line.label: tmp_line})
+
+        self._weighted_paths = pd.DataFrame()
+        self._route_space = pd.DataFrame()
+
     @property
-    def nodes ( self ):
-        return self . _nodes
+    def nodes(self):
+        return self._nodes
+
+    @nodes.setter
+    def nodes(self, nodes: dict):
+        self._nodes = nodes
+
     @property
-    def lines ( self ):
-        return self . _lines
+    def lines(self):
+        return self._lines
+
+    @lines.setter
+    def lines(self, lines: dict):
+        self._lines = lines
 
     @property
     def weighted_paths(self):
         return self._weighted_paths
 
-    def set_weighted_paths(self, signal_power):
-        if not self.connected:
-            self.connect()
-        node_labels = self.nodes.keys()
-        pairs = []
-        for label1 in node_labels:
-            for label2 in node_labels:
-                if label1 != label2:
-                    pairs.append(label1 + label2)
-    df = pd.DataFrame()
-    paths = []
-    latencies = []
-    noises = []
-    snrs = []
-    for pair in pairs:
-        for path in self.find_paths(pair[0], pair[1]):
-            path_string = ''
-            for node in path:
-                path_string += node + '->'
-            paths.append(path_string[: -2])
-            # Propagation
-            signal_information = SignalInformation(signal_power, path)
-            signal_information = self.propagate(signal_information)
-            latencies.append(signal_information.latency)
-            noises.append(signal_information.noise_power)
-            snrs.append(
-                10 * np.log10(
-                    signal_information.signal_power /
-                    signal_information.noise_power
-                )
-            )
-    df['path '] = paths
-    df['latency '] = latencies
-    df['noise '] = noises
-    df['snr '] = snrs
-    self._weighted_paths = df
+    @weighted_paths.setter
+    def weighted_paths(self, weighted_paths: pd.DataFrame):
+        self._weighted_paths = weighted_paths
 
+    @property
+    def route_space(self):
+        return self._route_space
 
-    def draw ( self ):
-        nodes = self . nodes
-        for node_label in nodes :
-            n0 = nodes [ node_label ]
-            x0 = n0. position [0]
-            y0 = n0. position [1]
-            plt . plot (x0 ,y0 ,'go ',markersize =10)
-            plt . text (x0 +20 , y0 +20 , node_label )
-            for connected_node_label in n0. connected_nodes :
-                n1 = nodes [ connected_node_label ]
-                x1 = n1. position [0]
-                y1 = n1. position [1]
-                plt . plot ([x0 ,x1 ],[y0 ,y1],'b')
-        plt. title ('Network ')
-        plt. show ()
-    def find_paths (self ,label1 , label2 ):
-        cross_nodes = [key for key in self . nodes . keys ()
-                        if (( key != label1 ) & ( key != label2 ))]
-        cross_lines = self . lines . keys ()
-        inner_paths = {}
-        inner_paths ['0'] = label1
-        for i in range (len ( cross_nodes )+1):
-            inner_paths [ str(i +1)] = []
-            for inner_path in inner_paths [str (i)]:
-                inner_paths [str(i +1)]+=[ inner_path + cross_node
-                    for cross_node in cross_nodes
-                        if (( inner_path [ -1]+ cross_node in cross_lines ) &
-                            ( cross_node not in inner_path ))]
+    def connect(self):
+        """
+        Sets the successive attributes of all the network elements as dictionaries, updates route_space and switching_matrix
+        """
+
+        for node in self._nodes:
+            tmp_dict_nodes = {}
+            for line in self._lines:
+                tmp_dict_lines = {}
+                if line.find(node) == 1:  # if a line contains a node as destination, update succ dictionary in the line
+                    tmp_dict_lines.update({node: self._nodes.get(node)})
+                    self._lines.get(line).successive = tmp_dict_lines
+                elif line.find(node) == 0:  # if a line contains a node as source, update succ dictionary in the node
+                    tmp_dict_nodes.update({line: self._lines.get(line)})
+
+            self._nodes.get(node).successive = tmp_dict_nodes
+
+        all_paths = []
+
+        for src in self._nodes:
+            for dst in self._nodes:
+                if src != dst:
+                    all_paths.append(self.find_paths(src, dst))
+
+        signal_power = 0.001
+        results = {}
+
+        for paths in all_paths:
+            for path in paths:
+                sig_inf = SignalInformation(signal_power, path)
+                sig_inf = self.propagate(sig_inf, 0)
+                path_str = '->'.join(path)
+                results.update(
+                    {path_str: [sig_inf.latency, sig_inf.noise_power,
+                                10 * math.log10(1/sig_inf.isnr)]})
+
+        self.weighted_paths = pd.DataFrame(data=results)
+        self.weighted_paths.index = ['Latency (s)', 'Noise power (W)', 'SNR (dB)']
+
+        channels = {}
+        for i in range(0, 10):
+            channels.update({i: 'free'})
+
+        paths = results.keys()
+        route_space = {}
+
+        for path in paths:
+            route_space.update({path: channels})
+
+        self._route_space = pd.DataFrame(data=route_space)
+
+        ones = []
+        zeros = []
+        for i in range(0, 10):
+            ones.append(1)
+            zeros.append(0)
+
+        switching_matrix = {}
+
+        for node in self._nodes:
+            for node2 in self._nodes:
+                if node2 != node:
+                    switching_matrix.update({node2: {}})
+                    for node3 in self._nodes:
+                        if node not in self._nodes.get(node2).connected_nodes or node2 == node3 or node3 not in self._nodes.get(node).connected_nodes:
+                            switching_matrix.get(node2).update({node3: np.array(zeros)})
+                        elif node3 != node:
+                            switching_matrix.get(node2).update({node3: np.array(ones)})
+                    switching_matrix.get(node2).pop(node)
+
+            self._nodes.get(node).switching_matrix = switching_matrix
+            switching_matrix = {}
+
+    def find_paths(self, node1_label: str, node2_label: str):
+        """
+        Finds all paths that connect the two nodes
+
+        :param node1_label: Label of first node
+        :param node2_label: Label of second node
+        :return: list of paths
+        :rtype: list[list[str]]
+        """
+
+        node1 = self._nodes.get(node1_label)
         paths = []
-        for i in range (len ( cross_nodes )+1):
-            for path in inner_paths [str (i)]:
-                if path [ -1] + label2 in cross_lines :
-                    paths . append ( path + label2 )
+
+        tmp_path = [node1_label]
+        self.__find_path(node1, node2_label, paths, tmp_path)
+
         return paths
 
+    def __find_path(self, node: Node, dest_node_label: str, paths: List[List[str]],
+                    tmp_path: List[str]):  # internal recursive function to find all paths
+        if dest_node_label in node.connected_nodes:
+            tmp_path.append(dest_node_label)
+            paths.append(tmp_path.copy())
+            tmp_path.remove(dest_node_label)  # remove last element, path already saved
 
-# noinspection PyUnreachableCode
-def connect(self):
-        nodes_dict = self . nodes
-        lines_dict = self . lines
-        for node_label in nodes_dict :
-            node = nodes_dict [ node_label ]
-            for connected_node in node . connected_nodes :
-                line_label = node_label + connected_node
-                line = lines_dict [ line_label ]
-                line.successive [ connected_node ] = nodes_dict [ connected_node ]
-                node.successive [ line_label ] = lines_dict [ line_label ]
-                self.connected= True
+        for node_ in node.connected_nodes:  # check if there are other longer paths remaining
+            if node_ not in tmp_path and node_ != dest_node_label:
+                tmp_path.append(node_)
+                self.__find_path(self._nodes.get(node_), dest_node_label, paths, tmp_path)
+                tmp_path.remove(node_)
 
-    def propagate (self , signal_information ):
-        path = signal_information . path
-        start_node = self . nodes [ path [0]]
-        propagated_signal_information =start_node.propagate(signal_information)
-        return propagated_signal_information
+    def propagate(self, sig_inf: SignalInformation, channel: int = 0, connection=False):
+        """
+        Propagates the signal through the path specified in it
 
+        :param sig_inf: SignalInformation object
+        :param connection: True if trying to create a Connection over the lines in the path, False by default, optional
+        :param channel: Number of the channel
+        :return: updated SignalInformation object
+        :rtype: SignalInformation
+        """
 
-def find_best_snr(self, input_node, output_node):
-    all_paths = self.weighted_paths.path.values
-    inout_paths = [path for path in all_paths
-                   if ((path[0] == input_node) and (path[-1] == output_node))]
-    inout_df = self.weighted_paths.loc[
-        self.weighted_paths.path.isin(inout_paths)]
-    best_snr = np.max(inout_df.snr.values)
-    best_path = inout_df.loc[
-        inout_df.snr == best_snr].path.values[0].replace('->', '')
-    return best_path
+        if isinstance(sig_inf, LightPath):
+            sig_inf.channel = channel
+            sig_path = sig_inf.path.copy()
+            self._nodes.get(sig_inf.path[0]).propagate(sig_inf, channel, connection)
+            if connection:
+                self._route_space.at[channel, '->'.join(sig_path)] = 'occupied'
+                for i in range(1, len(sig_path) - 1):
+                    node = sig_path[i]
+                    self._nodes.get(node).update_switching_matrix(channel, sig_path[i - 1], sig_path[i + 1], 0)
+                    for path in self._route_space.columns:
+                        for j in range(0, len(sig_path) - 1):
+                            if '->'.join([sig_path[j], sig_path[j + 1]]) in path:
+                                self._route_space.at[channel, path] = 'occupied'
 
-def find_best_latency (self , input_node , output_node ):
-    all_paths = self . weighted_paths . path . values
-    inout_paths = [ path for path in all_paths
-        if (( path [0]== input_node ) and ( path [ -1]== output_node ))]
-    inout_df = self . weighted_paths .loc[
-        self . weighted_paths . path . isin ( inout_paths )]
-    best_latency = np.min ( inout_df . latency . values )
-    best_path = inout_df .loc[
-        inout_df . latency == best_latency ]. path . values [0]. replace ('->','')
-    return best_path
-
-def propagate (self , lightpath , occupation = False ):
-    path = lightpath . path
-    start_node = self . nodes [ path [0]]
-    propagated_lightpath = start_node . propagate ( lightpath , occupation )
-    return propagated_lightpath
-def stream (self , connections , best ='latency '):
-    streamed_connections = []
-    for connection in connections :
-        input_node = connection . input_node
-        output_node = connection . output_node
-        signal_power = connection . signal_power
-        if best == 'latency ':
-            path = self . find_best_latency ( input_node , output_node )
-        elif best == 'snr ':
-            path = self . find_best_snr ( input_node , output_node )
-        else :
-            print ('ERROR : best input not recognized . Value :',best )
-        continue
-        if path :
-        path_occupancy = self . route_space . loc[
-        self . route_space . path == path ].T. values [1:]
-        channel = [i for i in range (len( path_occupancy ))
-        if path_occupancy [i ]== 'free '][0]
-        path = path . replace ('->','')
-        in_lightpath = Lightpath ( signal_power ,path , channel )
-        out_lightpath = self . propagate ( in_lightpath , True )
-        connection . latency = out_lightpath . latency
-        noise_power = out_lightpath . noise_power
-        connection .snr = 10* np. log10 ( signal_power / noise_power )
-        self . update_route_space (path , channel )
-        else :
-        connection . latency = None
-        connection .snr = 0
-        streamed_connections . append ( connection )
-    return streamed_connections
-@staticmethod
-def path_to_line_set ( path ):
-    path = path . replace ('->','')
-    return set ([ path [i] + path [i +1] for i in range ( len( path ) -1)])
-def update_route_space (self ,path , channel ):
-    all_paths = [ self . path_to_line_set (p)
-    for p in self . route_space . path . values ]
-    states = self . route_space [ str( channel )]
-    lines = self . path_to_line_set ( path )
-    for i in range (len ( all_paths )):
-        line_set = all_paths [i]
-        if lines . intersection ( line_set ):
-            states [i] = 'occupied '
-            self . route_space [ str( channel )] = states
-def find_best_snr (self , input_node , output_node ):
-    available_paths = self . available_paths ( input_node , output_node )
-    if available_paths :
-        inout_df = self . weighted_paths .loc[
-        self . weighted_paths . path . isin ( available_paths )]
-        best_snr = np.max( inout_df .snr. values )
-        best_path = inout_df .loc[
-        inout_df .snr == best_snr ]. path . values [0]. replace ('->','')
-    else :
-        best_path = None
-        return best_path
-def find_best_latency (self , input_node , output_node ):
-    available_paths = self . available_paths ( input_node , output_node )
-    if available_paths :
-        inout_df = self . weighted_paths .loc[
-        self . weighted_paths . path . isin ( available_paths )]
-        best_latency = np. min( inout_df . latency . values )
-        best_path = inout_df .loc[
-        inout_df . latency == best_latency ]. path . values [0]. replace ('->','')
-    else :
-        best_path = None
-    return best_path
-
-
-def stream(self, connections: List[Connection], label: str = 'latency'):
-    """
-    Sets latency and SNR for each connection in the list
-
-    :param connections: list of Connection objects
-    :param label: 'snr' or 'latency'
-    """
-
-    if label not in ['snr', 'latency']:
-        print("Invalid label")
-        return
-
-    for connection in connections:
-        best_snr = 0
-        best_latency = math.inf
-        best_channel = None
-        best_path = ''
-
-        if label == 'snr':
-            for channel in self._route_space.index:
-                (path, snr) = self.find_best_snr(self._nodes.get(connection.input).label,
-                                                 self._nodes.get(connection.output).label, channel)
-                if snr > best_snr:
-                    best_path = path
-                    best_channel = channel
-                    best_snr = snr
         else:
-            for channel in self._route_space.index:
-                (path, latency) = self.find_best_latency(self._nodes.get(connection.input).label,
-                                                         self._nodes.get(connection.output).label, channel)
-                if latency < best_latency:
-                    best_path = path
-                    best_channel = channel
-                    best_latency = latency
+            self._nodes.get(sig_inf.path[0]).propagate(sig_inf, channel, connection)
 
-        if best_path != '':
-            sig_inf = LightPath(connection.signal_power, best_path.split('->'))
-            bit_rate = self.calculate_bit_rate(sig_inf, self._nodes.get(best_path[0]).transceiver, best_channel)
-            if bit_rate != 0:
-                # sig_inf = LightPath(connection.signal_power, best_path.split('->'))
-                self.propagate(sig_inf, best_channel, True)
-                # connection.snr = 10 * math.log10(connection.signal_power / sig_inf.noise_power)
-                connection.snr = 1 / sig_inf.isnr
-                connection.latency = sig_inf.latency
-                connection.bit_rate = bit_rate
+        return sig_inf
+
+    def draw(self):
+        """
+        Draws the network
+        """
+        nodes_x = {}
+        nodes_y = {}
+
+        for node in self._nodes.values():
+            nodes_x.update({node.label: node.position[0]})
+            nodes_y.update({node.label: node.position[1]})
+
+        fig = plt.figure()
+        ax = fig.add_subplot()
+
+        x = np.array(list(nodes_x.values()))
+        y = np.array(list(nodes_y.values()))
+
+        lines_x = {}
+        lines_y = {}
+
+        for line in self._lines:
+            lines_x.update({line: (nodes_x.get(line[0]), nodes_x.get(line[1]))})
+            lines_y.update({line: (nodes_y.get(line[0]), nodes_y.get(line[1]))})
+
+        for line in self._lines:
+            xx = np.array(lines_x.get(line))
+            yy = np.array(lines_y.get(line))
+            plt.plot(xx, yy, linestyle='-', linewidth=2)
+
+        plt.plot(x, y, marker='o', ls='', c='lightblue', ms=20)  # plot nodes
+
+        nodes_pos = {}
+
+        for node in self._nodes.values():
+            nodes_pos.update({node.position: node.label})
+
+        for xy in zip(x, y):
+            ax.annotate(f'{nodes_pos.get(xy)}', fontweight='bold', fontsize='large', ma='left', va='center', c='black',
+                        xy=xy, xytext=(xy[0] - 7000, xy[1]), textcoords='data')
+
+        plt.title('Network')
+
+        plt.show()
+
+    def find_best_snr(self, src_node: str, dst_node: str, channel: int = -1):
+        """
+        Finds path with highest SNR
+
+        :param src_node: Source Node label
+        :param dst_node: Destination Node label
+        :param channel: Number of the channel
+        :return: path with highest SNR
+        :rtype: str
+        """
+
+        best_snr = 0
+        best_snr_path = ''
+
+        # if self._weighted_paths.empty:
+        #     print("Paths not defined")
+        # else:
+        #     tmp_paths = self._weighted_paths.to_dict()
+        #     for path in tmp_paths:
+        #         if path[0] == src_node and path[-1] == dst_node:
+        #             snr = tmp_paths.get(path).get('SNR (dB)')
+        #             if snr > best_snr:
+        #                 best_snr = snr
+        #                 best_snr_path = path
+
+        signal_power = 0.001
+
+        paths = self.find_paths(src_node, dst_node)
+
+        for path in paths:
+            path_str = '->'.join(path)
+            sig_inf = SignalInformation(signal_power, path)
+            if channel != -1:
+                sig_inf = self.propagate(sig_inf, channel)
+            else:
+                sig_inf = self.propagate(sig_inf)
+            if sig_inf.latency != 0 and sig_inf.noise_power != 0:
+                # snr = math.log10(signal_power / sig_inf.noise_power)
+                snr = 1/sig_inf.isnr
+                if snr > best_snr:
+                    best_snr = snr
+                    best_snr_path = path_str
+
+        return best_snr_path, best_snr
+
+    def find_best_latency(self, src_node: str, dst_node: str, channel: int = -1):
+        """
+        Finds path with lowest latency
+
+        :param src_node: Source Node label
+        :param dst_node: Destination Node label
+        :param channel: Number of the channel
+        :return: path with lowest latency
+        :rtype: str
+        """
+
+        best_lat = math.inf
+        best_lat_path = ''
+
+        # if self._weighted_paths.empty:
+        #     print("Paths not defined")
+        # else:
+        #     tmp_paths = self._weighted_paths.to_dict()
+        #     for path in tmp_paths:
+        #         if path[0] == src_node and path[-1] == dst_node:
+        #             lat = tmp_paths.get(path).get('Latency (s)')
+        #             if lat < best_lat:
+        #                 best_lat = lat
+        #                 best_lat_path = path
+
+        signal_power = 0.001
+
+        paths = self.find_paths(src_node, dst_node)
+
+        for path in paths:
+            path_str = '->'.join(path)
+            sig_inf = SignalInformation(signal_power, path)
+            if channel != -1:
+                sig_inf = self.propagate(sig_inf, channel)
+            else:
+                sig_inf = self.propagate(sig_inf)
+            if sig_inf.latency != 0 and sig_inf.noise_power != 0:
+                if sig_inf.latency < best_lat:
+                    best_lat = sig_inf.latency
+                    best_lat_path = path_str
+
+        return best_lat_path, best_lat
+
+    def stream(self, connections: List[Connection], label: str = 'latency'):
+        """
+        Sets latency and SNR for each connection in the list
+
+        :param connections: list of Connection objects
+        :param label: 'snr' or 'latency'
+        """
+
+        if label not in ['snr', 'latency']:
+            print("Invalid label")
+            return
+
+        for connection in connections:
+            best_snr = 0
+            best_latency = math.inf
+            best_channel = None
+            best_path = ''
+
+            if label == 'snr':
+                for channel in self._route_space.index:
+                    (path, snr) = self.find_best_snr(self._nodes.get(connection.input).label,
+                                                     self._nodes.get(connection.output).label, channel)
+                    if snr > best_snr:
+                        best_path = path
+                        best_channel = channel
+                        best_snr = snr
+            else:
+                for channel in self._route_space.index:
+                    (path, latency) = self.find_best_latency(self._nodes.get(connection.input).label,
+                                                             self._nodes.get(connection.output).label, channel)
+                    if latency < best_latency:
+                        best_path = path
+                        best_channel = channel
+                        best_latency = latency
+
+            if best_path != '':
+                sig_inf = LightPath(connection.signal_power, best_path.split('->'))
+                bit_rate = self.calculate_bit_rate(sig_inf, self._nodes.get(best_path[0]).transceiver, best_channel)
+                if bit_rate != 0:
+                    # sig_inf = LightPath(connection.signal_power, best_path.split('->'))
+                    self.propagate(sig_inf, best_channel, True)
+                    # connection.snr = 10 * math.log10(connection.signal_power / sig_inf.noise_power)
+                    connection.snr = 1/sig_inf.isnr
+                    connection.latency = sig_inf.latency
+                    connection.bit_rate = bit_rate
+                else:
+                    connection.snr = 0.0
+                    connection.latency = None
             else:
                 connection.snr = 0.0
                 connection.latency = None
-        else:
-            connection.snr = 0.0
-            connection.latency = None
 
-def set_weighted_paths (self , signal_power ):
-    if not self . connected :
-        self . connect ()
-        node_labels = self . nodes . keys ()
-        pairs = []
-    for label1 in node_labels :
-        for label2 in node_labels :
-        if label1 != label2 :
-        pairs . append ( label1 + label2 )
-        df = pd. DataFrame ()
-        paths = []
-        latencies = []
-        noises = []
-        snrs = []
-        for pair in pairs :
-            for path in self . find_paths ( pair [0] , pair [1]):
-            path_string = ''
-            for node in path :
-                path_string += node + '->'
-                                        paths . append ( path_string [: -2])
-            # Propagation
-            signal_information = SignalInformation ( signal_power , path )
-            signal_information =
-            self . propagate ( signal_information , occupation = False )
-        latencies . append ( signal_information . latency )
-            noises . append ( signal_information . noise_power )
-        snrs . append (
-        10* np. log10 ( signal_information . signal_power /
-        signal_information . noise_power ))
-df['path '] = paths
-df['latency '] = latencies
-df['noise '] = noises
-df['snr '] = snrs
-self . _weighted_paths = df
-route_space = pd. DataFrame ()
-route_space ['path '] = paths
-for i in range (10):
-    route_space [str(i)]= ['free ']* len( paths )
-    self . _route_space = route_space
     def calculate_bit_rate(self, lightpath: LightPath, strategy: str, channel: int = 0):
         """
         Evaluates the bitrate supported by the given path
@@ -377,3 +434,68 @@ for i in range (10):
             Rb = 2 * Rs * math.log2(1 + snr * Bn / Rs)
 
         return Rb
+
+    def generate_traffic(self, M: int = 1):
+        # M = 3
+        bit_rate = 100
+        n_sat = 0
+
+        traffic_matrix = {}
+        zero_matrix = {}
+        for src_node in self._nodes:
+            row = {}
+            z_row = {}
+            for dst_node in self._nodes:
+                if src_node != dst_node:
+                    row.update({dst_node: M * bit_rate})
+                    z_row.update({dst_node: 0})
+                else:
+                    row.update({dst_node: 0})
+                    z_row.update({dst_node: 0})
+            traffic_matrix.update({src_node: row})
+            zero_matrix.update({src_node: z_row})
+
+        nodes_str = ''
+        for node in self._nodes:
+            nodes_str += node
+
+        traffic_matrix = pd.DataFrame(data=traffic_matrix)
+        zero_matrix = pd.DataFrame(data=zero_matrix)
+
+        connections = []
+        saturated = False
+        while not saturated:
+            old_tm = traffic_matrix.copy()
+            while True:
+                src = random.choice(nodes_str)
+                dst = random.choice(nodes_str)
+                if src != dst and traffic_matrix.at[src, dst] != 0:
+                    break
+
+            # print(old_tm)
+            # print('------------------')
+            # print(src + '->' + dst)
+
+            connections.append(Connection(src, dst, 0.0001))
+            connection = connections[-1]
+            self.stream([connection])
+            if traffic_matrix.at[src, dst] != math.inf:
+                traffic_matrix.at[src, dst] -= connection.bit_rate
+            if traffic_matrix.at[src, dst] < 0:
+                traffic_matrix.at[src, dst] = 0
+
+            if traffic_matrix.equals(old_tm):
+                saturated = True
+                # print(traffic_matrix)
+                # print('------------------')
+                # print('The network is saturated')
+                n_sat += 1
+            elif traffic_matrix.equals(zero_matrix):
+                saturated = True
+                # print(traffic_matrix)
+                # print('------------------')
+                # print('The network is saturated')
+
+        return n_sat
+
+

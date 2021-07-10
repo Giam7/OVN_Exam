@@ -54,6 +54,7 @@ class Node:
         lightpath.next()
         lightpath = line.propagate(lightpath, occupation)
     return lightpath
+
     def update_switching_matrix(self, channel: int, src: str, dst: str, state: int):
         """
         Updates the switching matrix
