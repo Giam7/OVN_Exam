@@ -19,62 +19,62 @@ def main():
     test_conn = 1000
     #
     for i in range(0, test_conn):
-        print(i)
-        network = Network('nodes.json')
-        network.connect()
-        connections = []
+         print(i)
+         network = Network('nodes.json')
+         network.connect()
+         connections = []
 
-        nodes_str = ''
-        for node in network.nodes:
-            nodes_str += node
+         nodes_str = ''
+         for node in network.nodes:
+             nodes_str += node
 
-        for i in range(0, 100):
-            while True:
-                src = random.choice(nodes_str)
-                dst = random.choice(nodes_str)
-                if src != dst and network.find_paths(src, dst):
-                    break
-            #         # print(src + '->' + dst)
-            connections.append(Connection(src, dst, 0.001))
-        #
-        network.stream(connections)
-        #
-        latencies = []
-        snrs = []
-        n_conn = 100
-        #
-        for connection in connections:
-            if connection.latency is not None:
-                latencies.append(connection.latency)
-                snrs.append(connection.snr)
-            else:
-                n_conn -= 1
-        #
-        lat_sum = math.fsum(latencies)
-        snr_sum = math.fsum(snrs)
-        #
-        avg_latencies.append(math.fsum(latencies) / len(latencies))
-        avg_snrs.append(10 * math.log10(math.fsum(snrs) / len(snrs)))
-        #
-        print(f'Average latency: {lat_sum / len(latencies)}')
-        print(f'Average SNR: {snr_sum / len(snrs)}')
-        #
-        bit_rates = []
-        #
-        for connection in connections:
-            bit_rates.append(connection.bit_rate)
-        #
-        # pd.DataFrame(data=bit_rates).plot.hist()
-        # plt.show()
-        #
-        total = math.fsum(bit_rates)
-        avg = total / len(bit_rates)
-        avg_bitrates.append(avg)
-        avg_total_band.append(total)
-        #
-        print(f'Total: {total} - Average: {avg}')
-        print(f'{n_conn} successful connections')
-        avg_n_connections.append(n_conn)
+         for i in range(0, 100):
+             while True:
+                 src = random.choice(nodes_str)
+                 dst = random.choice(nodes_str)
+                 if src != dst and network.find_paths(src, dst):
+                     break
+    #         # print(src + '->' + dst)
+             connections.append(Connection(src, dst, 0.001))
+    #
+         network.stream(connections)
+    #
+         latencies = []
+         snrs = []
+         n_conn = 100
+    #
+         for connection in connections:
+             if connection.latency is not None:
+                 latencies.append(connection.latency)
+                 snrs.append(connection.snr)
+             else:
+                 n_conn -= 1
+    #
+         lat_sum = math.fsum(latencies)
+         snr_sum = math.fsum(snrs)
+    #
+         avg_latencies.append(math.fsum(latencies) / len(latencies))
+         avg_snrs.append(10 * math.log10(math.fsum(snrs) / len(snrs)))
+    #
+         print(f'Average latency: {lat_sum / len(latencies)}')
+         print(f'Average SNR: {snr_sum / len(snrs)}')
+    #
+         bit_rates = []
+    #
+         for connection in connections:
+             bit_rates.append(connection.bit_rate)
+    #
+         # pd.DataFrame(data=bit_rates).plot.hist()
+         # plt.show()
+    #
+         total = math.fsum(bit_rates)
+         avg = total / len(bit_rates)
+         avg_bitrates.append(avg)
+         avg_total_band.append(total)
+    #
+         print(f'Total: {total} - Average: {avg}')
+         print(f'{n_conn} successful connections')
+         avg_n_connections.append(n_conn)
 
     # avg_latencies2 = []
     # avg_snrs2 = []
@@ -144,11 +144,11 @@ def main():
     #     # print(f'Total: {total} - Average: {avg}')
     #     # print(f'{n_conn} successful connections')
     #     avg_n_connections2.append(n_conn)
-
-    df = pd.DataFrame(data={'latency': latencies, 'snr': snrs})
-
+    #
+    # # df = pd.DataFrame(data={'latency': latencies, 'snr': snrs})
+    #
     # df = pd.DataFrame(data={'SNR': avg_snrs, 'SNR - lower beta2, higher NF': avg_snrs2})
-    df.plot(kind='kde', subplots=False, sharex=True, sharey=True)
+    # df.plot(kind='kde', subplots=False, sharex=True, sharey=True)
     #
     print(f'Average latency over {test_conn} connections : {math.fsum(avg_latencies) / len(avg_latencies)}')
     print(f'Average SNR over {test_conn} connections : {math.fsum(avg_snrs) / len(avg_snrs)}')
@@ -242,12 +242,12 @@ def main():
     results = {}
 
     for paths in all_paths:
-        for path in paths:
-            sig_inf = SignalInformation(signal_power, path)
-            sig_inf = network.propagate(sig_inf, 0)
-            path_str = '->'.join(path)
-            results.update(
-                {path_str: [sig_inf.latency, sig_inf.noise_power, 10 * math.log10(signal_power / sig_inf.noise_power)]})
+         for path in paths:
+             sig_inf = SignalInformation(signal_power, path)
+             sig_inf = network.propagate(sig_inf, 0)
+             path_str = '->'.join(path)
+             results.update(
+                 {path_str: [sig_inf.latency, sig_inf.noise_power, 10 * math.log10(signal_power / sig_inf.noise_power)]})
 
     network.weighted_paths = pd.DataFrame(data=results)
     network.weighted_paths.index = ['Latency (s)', 'Noise power (W)', 'SNR (dB)']
@@ -337,6 +337,7 @@ def main():
     print(f'Flex rate:\tTotal: {total_flex}\tAverage: {avg_flex}')
     print(f'Shannon rate:\tTotal: {total_shannon}\tAverage: {avg_shannon}')
 
+
     return
 
     latencies = []
@@ -352,9 +353,9 @@ def main():
     df.plot.bar(subplots=True, sharex=False, sharey=False, title='Best latency')
     plt.show()
 
-    for line in network.lines:
-        for channel in network.route_space.index:
-            network.lines.get(line).free(channel)
+    # for line in network.lines:
+    #     for channel in network.route_space.index:
+    #         network.lines.get(line).free(channel)
 
     network.stream(connections, 'snr')
 
@@ -371,7 +372,6 @@ def main():
     df.plot.kde(subplots=True, sharex=False, sharey=False, title='Best SNR')
     df.plot.bar(subplots=True, sharex=False, sharey=False, title='Best SNR')
     plt.show()
-
 
 if __name__ == '__main__':
     main()
