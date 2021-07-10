@@ -320,3 +320,47 @@ route_space ['path '] = paths
 for i in range (10):
     route_space [str(i)]= ['free ']* len( paths )
     self . _route_space = route_space
+    def calculate_bit_rate(self, lightpath: LightPath, strategy: str, channel: int = 0):
+        """
+        Evaluates the bitrate supported by the given path
+
+        :param path: Path
+        :param strategy: Transceiver technology
+        :param channel: Channel
+        :return: Maximum bitrate supported by the path in Gbps
+        :rtype: int
+        """
+
+        signal_power = 0.001
+        sig_inf = SignalInformation(signal_power, lightpath.path)
+        sig_inf = self.propagate(sig_inf, channel)
+
+        if sig_inf.latency != 0 and sig_inf.noise_power != 0:
+            # snr = sig_inf.signal_power / sig_inf.noise_power
+            snr = 1/sig_inf.isnr
+        else:
+            return 0.0
+
+        BERt = 1e-3  # bit error rate
+        Rs = lightpath.Rs  # symbol rate of the lightpath in GHz
+        Bn = 12.5  # noise bandwidth in GHz
+        Rb = 0
+
+        if strategy == 'fixed_rate':
+            if snr >= 2 * ((special.erfcinv(2 * BERt)) ** 2) * Rs / Bn:
+                Rb = 100
+            else:
+                Rb = 0
+        elif strategy == 'flex_rate':
+            if snr < 2 * ((special.erfcinv(2 * BERt)) ** 2) * Rs / Bn:
+                Rb = 0
+            elif snr < 14 / 3 * ((special.erfcinv(3 / 2 * BERt)) ** 2) * Rs / Bn:
+                Rb = 100
+            elif snr < 10 * ((special.erfcinv(8 / 3 * BERt)) ** 2) * Rs / Bn:
+                Rb = 200
+            else:
+                Rb = 400
+        elif strategy == 'shannon':
+            Rb = 2 * Rs * math.log2(1 + snr * Bn / Rs)
+
+        return Rb
