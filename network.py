@@ -240,46 +240,59 @@ def find_best_latency (self , input_node , output_node ):
     else :
         best_path = None
     return best_path
-def stream (self , connections , best ='latency '):
-    streamed_connections = []
-        for connection in connections :
-        input_node = connection . input_node
-        output_node = connection . output_node
-        signal_power = connection . signal_power
-        self . set_weighted_paths (1)
-        if best == 'latency ':
-            path = self . find_best_latency ( input_node , output_node )
-        elif best == 'snr ':
-        path = self . find_best_snr ( input_node , output_node )
-        else :
-        print ('ERROR : best input not recognized . Value :',best )
-        continue
-        if path :
-    in_signal_information = SignalInformation ( signal_power , path )
-        out_signal_information =
-        self . propagate ( in_signal_information , True )
-        connection . latency = out_signal_information . latency
-        noise_power = out_signal_information . noise_power
-        connection .snr = 10* np. log10 ( signal_power / noise_power )
-        else :
-        connection . latency = None
-        connection .snr = 0
-        streamed_connections . append ( connection )
-        return streamed_connections
-    from random import shuffle
-    network = Network ('nodes . json ')
-    network . connect ()
-    node_labels = list ( network . nodes . keys ())
-    connections = []
-    for i in range (1000):
-    shuffle ( node_labels )
-        connection = Connection ( node_labels [0] , node_labels [ -1] ,1)
-    connections . append ( connection )
-streamed_connections = network . stream ( connections , best ='snr ')
-snrs =[ connection . snr for connection in streamed_connections ]
-plt. hist (snrs , bins =10)
-plt. title ('SNR Distribution ')
-plt. show ()
+
+
+def stream(self, connections: List[Connection], label: str = 'latency'):
+    """
+    Sets latency and SNR for each connection in the list
+
+    :param connections: list of Connection objects
+    :param label: 'snr' or 'latency'
+    """
+
+    if label not in ['snr', 'latency']:
+        print("Invalid label")
+        return
+
+    for connection in connections:
+        best_snr = 0
+        best_latency = math.inf
+        best_channel = None
+        best_path = ''
+
+        if label == 'snr':
+            for channel in self._route_space.index:
+                (path, snr) = self.find_best_snr(self._nodes.get(connection.input).label,
+                                                 self._nodes.get(connection.output).label, channel)
+                if snr > best_snr:
+                    best_path = path
+                    best_channel = channel
+                    best_snr = snr
+        else:
+            for channel in self._route_space.index:
+                (path, latency) = self.find_best_latency(self._nodes.get(connection.input).label,
+                                                         self._nodes.get(connection.output).label, channel)
+                if latency < best_latency:
+                    best_path = path
+                    best_channel = channel
+                    best_latency = latency
+
+        if best_path != '':
+            sig_inf = LightPath(connection.signal_power, best_path.split('->'))
+            bit_rate = self.calculate_bit_rate(sig_inf, self._nodes.get(best_path[0]).transceiver, best_channel)
+            if bit_rate != 0:
+                # sig_inf = LightPath(connection.signal_power, best_path.split('->'))
+                self.propagate(sig_inf, best_channel, True)
+                # connection.snr = 10 * math.log10(connection.signal_power / sig_inf.noise_power)
+                connection.snr = 1 / sig_inf.isnr
+                connection.latency = sig_inf.latency
+                connection.bit_rate = bit_rate
+            else:
+                connection.snr = 0.0
+                connection.latency = None
+        else:
+            connection.snr = 0.0
+            connection.latency = None
 
 def set_weighted_paths (self , signal_power ):
     if not self . connected :

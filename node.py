@@ -11,6 +11,7 @@ class Node:
         self._successive = {}  # dictionary of lines
         self._switching_matrix = None
         self.lenght
+        self._transceiver = attr_dict.get('transceiver', 'fixed-rate')
 
     @property
     def label(self):
