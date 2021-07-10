@@ -1,3 +1,4 @@
+from signal_information import SignalInformation
 class Lightpath ( object ):
     def __init__ (self ,power ,path , channel ):
         self . _signal_power = power
@@ -5,6 +6,8 @@ class Lightpath ( object ):
         self . _channel = channel
         self . _noise_power = 0
         self . _latency = 0
+        self._Rs = 32  # symbol rate in GHz
+        self._df = 50  # frequency spacing between channels in GHz
     @property
     def signal_power ( self ):
         return self . _signal_power
@@ -42,3 +45,19 @@ class Lightpath ( object ):
 
         def next(self):
             self.path = self.path[1:]
+
+            @property
+            def Rs(self):
+                return self._Rs
+
+            @Rs.setter
+            def Rs(self, Rs: float):
+                self._Rs = Rs
+
+            @property
+            def df(self):
+                return self._df
+
+            @df.setter
+            def df(self, df: float):
+                self._df = df
