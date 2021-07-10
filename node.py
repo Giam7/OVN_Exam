@@ -62,4 +62,3 @@ class Node:
         :param dst: Destination node label
         :param state: 0 is occupied, 1 is free
         """
-        self._switching_matrix[src][dst][channel] = state
